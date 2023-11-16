@@ -1,12 +1,12 @@
 # 基于紫光同创FPGA的多媒体视频处理魔盒（2023全国大学生FPGA创新设计竞赛）
 
-## 1.Project文件夹：PDS工程文件
-## 2. Source：主要程序
-## 3.Sim：modelsim仿真文件
+## .Project文件夹：PDS工程文件
+## . Source：主要程序
+## .Sim：modelsim仿真文件
+（程序移植时请注意本工程顶层文件参数定义时使用了绝对地址，移植的话需要按照本地地址更改）
 
 
-
-主要程序所在文件夹Projiect/source和Source
+## 主要程序所在文件夹Projiect/source和Source，下面介绍其内含模块
 
 ### 1 Projiect/source
 
