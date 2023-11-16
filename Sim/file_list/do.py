@@ -1,0 +1,16 @@
+import os
+ 
+if __name__ == "__main__":
+   file_list = []
+   path = 'Projet\source\rtl\rd_fram_buf'
+ 
+   for root, directory, files in os.walk(path):
+      for file in files:
+         if file[-2:] == ".v" or file[-3:] == ".vp":
+            file_list.append(root.replace('\\', '/')+'/'+file)
+ 
+   with open('./sim_src_list.f', 'w') as f:
+      for file in file_list:
+         # f.write("{:s}\n".format(file))
+         f.write(file+'\n')
+         # file.replace("./../..","F:/Project/WorkSpace/FPGA/MES50HP/07_ddr3_test/ipcore/ddr3_test")

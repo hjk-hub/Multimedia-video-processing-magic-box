@@ -1,0 +1,282 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company:Meyesemi
+// Engineer: Will
+//
+// Create Date: 2023-03-17
+// Design Name:
+// Module Name:
+// Project Name:
+// Target Devices: Pango
+// Tool Versions:
+// Description:
+//
+// Dependencies:
+//
+// Revision:
+// Revision 1.0 - File Created
+// Additional Comments:
+//
+//////////////////////////////////////////////////////////////////////////////////
+`define UD #1
+
+module processor
+  #(
+`include"F:/Project/WorkSpace/FPGA/Video_pro/Source/top/global.vh"
+   )
+   (
+     input                 axi_clk               ,
+     input                 axi_arst_n            ,
+     input     [7:0]       mode                  ,
+
+     output wire           vout_clk      ,
+     output wire           vout_vs       ,
+     output wire           vout_hs       ,
+     output wire           vout_de       ,
+     output wire  [15:0]   vout_data     ,
+
+
+     input   wire          img_720_clk_i ,
+     input   wire          img_720_vs_i  ,
+     input   wire          img_720_hs_i  ,
+     input   wire          img_720_de_i  ,
+     input   wire  [15:0]  img_720_data_i,
+
+     input   wire          img_1080_clk_i ,
+     input   wire          img_1080_vs_i  ,
+     input   wire          img_1080_hs_i  ,
+     input   wire          img_1080_de_i  ,
+
+     output wire  						            wr_burst_req      ,
+     output wire   [LEN_WIDTH - 1:0] 	    wr_burst_len      ,
+     output wire   [AXI_ADDR_WIDTH-1:0]   wr_burst_addr     ,
+     input  wire   					              wr_burst_data_req ,
+     output wire   [AXI_DATA_WIDTH - 1:0] wr_burst_data     ,
+     input  wire   						            wr_burst_finish   ,
+
+     output wire  						            rd_burst_req        ,
+     output wire   [LEN_WIDTH - 1:0] 	    rd_burst_len        ,
+     output wire   [AXI_ADDR_WIDTH-1:0]   rd_burst_addr       ,
+     input  wire   						            rd_burst_data_valid ,
+     input  wire   [AXI_DATA_WIDTH - 1:0] rd_burst_data       ,
+     input  wire   						            rd_burst_finish
+
+   );
+  //parameter
+
+  //reg and wire
+
+  reg                                img_hs;
+
+  reg                                img_hs_YcBcr     ;
+  wire                               img_de_YcBcr     ;
+  wire      [15:0]                   img_data_YcBcr   ;
+  wire                               rset_n_YcBcr     ;
+
+  wire                               img_de_Filter    ;
+  wire      [7:0]                    r_data   ;
+  wire      [7:0]                    g_data   ;
+  wire      [7:0]                    b_data   ;
+  wire      [15:0]                   img_data_Filter;
+  //
+  assign vout_clk =     img_720_clk_i;
+
+  assign vout_vs     = img_720_vs_i;
+
+  assign vout_hs     = img_720_hs_i;
+  
+
+  assign vout_de     = ((mode[2:0]) == 3'b011)?img_de_Filter:
+         ((mode[2:0]) == 3'b010)?img_de_YcBcr:
+         ((mode[2:0]) == 3'b001)?img_720_de_i:1'b0;
+
+  assign vout_data   = ((mode[2:0]) == 3'b011)?img_data_Filter:
+         ((mode[2:0]) == 3'b010)?img_data_YcBcr:
+         ((mode[2:0]) == 3'b001)?img_720_data_i:15'd0;
+
+
+  assign rset_n_YcBcr = ((mode[2:0]) == 3'b010)?1'b1:1'b0;
+  assign rset_n_Filter = ((mode[2:0]) == 3'b011)?1'b1:1'b0;
+
+  /************************************************************************/
+  // assign img_data_Filter = {r_data[7:3],g_data[7:2],b_data[7:3]};
+  assign img_data_Filter = {r_data[7:3],g_data[7:2],b_data[7:3]};
+  /*
+  *灰度图
+  */
+  always @(posedge img_720_clk_i)
+  begin
+    if(!axi_arst_n)
+    begin
+      img_hs <= 1'b0;
+    end
+    else
+    begin
+      img_hs <= img_720_vs_i;
+    end
+
+  end
+
+  //
+  vip u_vip(
+        //module clock
+        .clk              (img_720_clk_i    ),           // 时钟信号
+        .rst_n            (axi_arst_n | rset_n_YcBcr ),          // 复位信号(低有效)
+        // .rst_n            (rst_n      ),
+        //图像处理前的数据接口
+        .pre_frame_vsync  (img_720_vs_i     ),
+        .pre_frame_hsync  (img_hs       ),
+        .pre_frame_de     (img_720_de_i     ),
+        .pre_rgb          (img_720_data_i   ),
+        .xpos             (10'd0        ),
+        .ypos             (10'd0        ),
+        //图像处理后的数据接口
+        .post_frame_vsync (             ),  // 场同步信号
+        .post_frame_hsync (             ),                  // 行同步信号
+        .post_frame_de    (img_de_YcBcr ),     // 数据输入使能
+        .post_rgb         (img_data_YcBcr)            // RGB565颜色数据
+
+      );
+  /*************************************************************/
+  /*
+  *中值滤波
+  */
+  vip_gray_median_filter u_vip_gray_median_filter_r(
+                           .clk    (img_720_clk_i),
+                           .rst_n  (axi_arst_n | rset_n_Filter ),
+
+                           //处理前图像数据
+                           .pe_frame_vsync (img_720_vs_i),      // vsync信号
+                           .pe_frame_href  (img_720_de_i),       // href信号
+                           .pe_frame_clken (img_720_de_i),      // data enable信号
+                           .pe_img_y       ({img_720_data_i[15:11],3'd0}),
+
+                           //处理后的图像数据
+                           .pos_frame_vsync (             ),   // vsync信号
+                           .pos_frame_href  (             ),   // href信号
+                           .pos_frame_clken (img_de_Filter),   // data enable信号
+                           .pos_img_y       (r_data       )    //中值滤波后的灰度数据
+                         );
+
+  //g
+  vip_gray_median_filter u_vip_gray_median_filter_g(
+                           .clk    (img_720_clk_i),
+                           .rst_n  (axi_arst_n | rset_n_Filter ),
+
+                           //处理前图像数据
+                           .pe_frame_vsync (img_720_vs_i),      // vsync信号
+                           .pe_frame_href  (img_720_de_i),       // href信号
+                           .pe_frame_clken (img_720_de_i),      // data enable信号
+                           .pe_img_y       ({img_720_data_i[10:5],3'd0}),
+
+                           //处理后的图像数据
+                           .pos_frame_vsync (             ),   // vsync信号
+                           .pos_frame_href  (             ),   // href信号
+                           .pos_frame_clken (              ),   // data enable信号
+                           .pos_img_y       (g_data       )    //中值滤波后的灰度数据
+                         );
+
+  //b
+  vip_gray_median_filter u_vip_gray_median_filter_b(
+                           .clk    (img_720_clk_i),
+                           .rst_n  (axi_arst_n | rset_n_Filter ),
+
+                           //处理前图像数据
+                           .pe_frame_vsync (img_720_vs_i),      // vsync信号
+                           .pe_frame_href  (img_720_de_i),       // href信号
+                           .pe_frame_clken (img_720_de_i),      // data enable信号
+                           .pe_img_y       ({img_720_data_i[4:0],3'd0}),
+
+                           //处理后的图像数据
+                           .pos_frame_vsync (             ),   // vsync信号
+                           .pos_frame_href  (             ),   // href信号
+                           .pos_frame_clken (             ),   // data enable信号
+                           .pos_img_y       (b_data       )    //中值滤波后的灰度数据
+                         );
+  /****************************************************************/
+  /*
+  *缩放
+  */
+  scale_ctr u_scale_ctr
+   (
+     .axi_clk               (axi_clk    ),
+     .rst_n                 (axi_arst_n ),
+     .mode                  (mode       ),
+
+     .vout_clk      (vout_clk ),
+     .vout_vs       (vout_vs  ),
+     .vout_hs       (vout_hs  ),
+     .vout_de       (vout_de  ),
+     .vout_data     (vout_data),
+
+
+     .img_720_clk_i (img_720_clk_i ),
+     .img_720_vs_i  (img_720_vs_i  ),
+     .img_720_hs_i  (img_720_hs_i  ),
+     .img_720_de_i  (img_720_de_i  ),
+     .img_720_data_i(img_720_data_i),
+
+     .img_1080_clk_i (img_1080_clk_i),
+     .img_1080_vs_i  (img_1080_vs_i ),
+     .img_1080_hs_i  (img_1080_hs_i ),
+     .img_1080_de_i  (img_1080_de_i ),
+
+     .wr_burst_req      (wr_burst_req     ),
+     .wr_burst_len      (wr_burst_len     ),
+     .wr_burst_addr     (wr_burst_addr    ),
+     .wr_burst_data_req (wr_burst_data_req),
+     .wr_burst_data     (wr_burst_data    ),
+     .wr_burst_finish   (wr_burst_finish  ),
+
+     .rd_burst_req       (rd_burst_req       ),
+     .rd_burst_len       (rd_burst_len       ),
+     .rd_burst_addr      (rd_burst_addr      ),
+     .rd_burst_data_valid(rd_burst_data_valid),
+     .rd_burst_data      (rd_burst_data      ),
+     .rd_burst_finish    (rd_burst_finish    ) 
+   )
+
+  /*
+  para_change  u_para_change (
+      .clk_wr         (clk_wr         ),
+      .clk_rd         (clk_rd         ),
+      .change_en      (change_en      ),
+      .t_width        (t_width        ),
+      .t_height       (t_height       ),
+      .rst_n          (rst_n          ),
+      .rd_vsync       (rd_vsync       ),
+      .wr_vsync       (wr_vsync       ),
+      .s_width        (s_width        ),
+      .s_height       (s_height       ),
+      .t_width_wr     (t_width_wr     ),
+      .t_height_wr    (t_height_wr    ),
+      .t_width_rd     (t_width_rd     ),
+      .t_height_rd    (t_height_rd    ),
+      .h_scale_k      (h_scale_k      ),
+      .v_scale_k      (v_scale_k      ),
+      .change_en_wr   (change_en_wr   ),
+      .change_en_rd   (change_en_rd   ),
+      .app_addr_rd_max(app_addr_rd_max),
+      .rd_bust_len    (rd_bust_len    ),
+      .app_addr_wr_max(app_addr_wr_max),
+      .wr_bust_len    (wr_bust_len    )
+    );
+    scale_top  u_scale_top (
+      .pixel_clk      (pixel_clk          ),
+      .sram_clk       (sram_clk           ),
+      .sys_rst_n      (sys_rst_n          ),
+      .hs             (hs                 ),
+      .vs             (vs                 ),
+      .de             (de                 ),
+      .s_width        (s_width            ),
+      .s_height       (s_height           ),
+      .t_width        (t_width            ),
+      .t_height       (t_height           ),
+      .h_scale_k      (h_scale_k          ),
+      .v_scale_k      (v_scale_k          ),
+      .pixel_data     (pixel_data         ),
+      .sram_data_out  (sram_data_out      ),
+      .data_valid     (data_valid         )
+    );*/
+  /////////////////////////////////////////////////////////////////////////////////////
+endmodule
