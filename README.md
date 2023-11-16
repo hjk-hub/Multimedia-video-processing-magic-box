@@ -6,7 +6,7 @@
 （程序移植时请注意本工程顶层文件参数定义时使用了绝对地址，移植的话需要按照本地地址更改）
 
 
-## 主要程序所在文件夹Projiect/source和Source，下面介绍其内含模块
+## 主要程序所在文件夹Project/source和Source，下面介绍其内含模块
 
 ### 1 Projiect/source
 
