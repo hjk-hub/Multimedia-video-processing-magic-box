@@ -8,11 +8,11 @@
 
 主要程序所在文件夹Projiect/source和Source
 
-###1 Projiect/source
+### 1 Projiect/source
 
 #### 文件夹下主要是OV5640驱动模块、HDMI驱动模块、为DDR读写写的DDR读写控制器和部分IP核
 
-###2 Source
+### 2 Source
 
 #### 该文件夹主要包括视频处理模块，包含
 
